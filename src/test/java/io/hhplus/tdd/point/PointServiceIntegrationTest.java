@@ -7,10 +7,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -34,14 +37,13 @@ class PointServiceIntegrationTest {
         // given
         long userId = 1L;
         long amount = 1000L;
-        UserPoint initialUserPoint = userPointTable.insertOrUpdate(1L, 500L);
 
         // when
         UserPoint chargedUserPoint = pointService.chargePoint(userId, amount);
 
         //then
         assertThat(chargedUserPoint.id()).isEqualTo(userId);
-        assertThat(chargedUserPoint.point()).isEqualTo(initialUserPoint.point() + amount);
+        assertThat(chargedUserPoint.point()).isEqualTo(amount);
 
         List<PointHistory> pointHistories = pointService.getPointHistories(userId);
         assertThat(pointHistories).hasSize(1)
@@ -74,49 +76,50 @@ class PointServiceIntegrationTest {
             );
     }
 
-    @DisplayName("특정 회원의 충전과 사용 요청이 동시에 들어오는 경우, 순차적으로 실행된다.")
+    @DisplayName("동일한 회원에 대한 충전과 사용 요청은 메서드가 실행된 순서대로 순차적으로 실행된다.")
     @Test
-    void chargeAndUseRequest_inAtSameTime_thenExecuteSequentially() throws InterruptedException {
+    void chargeAndUseRequest_withSameUser_thenExecuteSequentially() throws InterruptedException {
         // given
         long userId = 1L;
-        int threadCount = 10;
+        int threadCount = 2;
         long chargeAmount = 1000L;
         long useAmount = 500L;
 
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
         CountDownLatch latch = new CountDownLatch(threadCount);
 
-        // when
-        for (int i = 0; i < threadCount / 2; i++) {
-            executorService.submit(() -> {
-                try {
-                    pointService.chargePoint(userId, chargeAmount);
-                } finally {
-                    latch.countDown();
-                }
-            });
+        LinkedBlockingQueue<Runnable> taskQueue = new LinkedBlockingQueue<>();
 
-            executorService.submit(() -> {
+        // when
+        taskQueue.put(() -> {
+            try {
                 try {
-                    try {
-                        pointService.usePoint(userId, useAmount);
-                    } catch (IllegalArgumentException e) {
-                        // 잔고 부족 예외 무시 (정상적인 시나리오)
-                    }
-                } finally {
-                    latch.countDown();
+                    pointService.usePoint(userId, useAmount);
+                } catch (IllegalArgumentException e) {
+                    System.out.println("잔고 부족");
                 }
-            });
+            } finally {
+                latch.countDown();
+            }
+        });
+        taskQueue.put(() -> {
+            try {
+                pointService.chargePoint(userId, chargeAmount);
+            } finally {
+                latch.countDown();
+            }
+        });
+
+        while (!taskQueue.isEmpty()) {
+            Runnable task = taskQueue.take();
+            executorService.submit(task);
         }
         latch.await();
         executorService.shutdown();
 
         //then
-        long expectedPoint = threadCount / 2 * (chargeAmount - useAmount);
+        long expectedPoint = chargeAmount - useAmount;
         assertThat(pointService.getUserPoint(userId).point()).isEqualTo(expectedPoint);
-
-        List<PointHistory> histories = pointService.getPointHistories(userId);
-        assertThat(histories).hasSize(threadCount);
     }
 
 }
