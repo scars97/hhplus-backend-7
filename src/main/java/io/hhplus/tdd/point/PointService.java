@@ -30,24 +30,27 @@ public class PointService {
     }
 
     public UserPoint chargePoint(long id, long amount) {
-        if (amount < MIN_CHARGE_AMOUNT) {
-            throw new IllegalArgumentException("포인트 충전은 1,000원 이상부터 가능합니다.");
+        synchronized (userPointTable) {
+            if (amount < MIN_CHARGE_AMOUNT) {
+                throw new IllegalArgumentException("포인트 충전은 1,000원 이상부터 가능합니다.");
+            }
+            UserPoint userPoint = userPointTable.selectById(id);
+            PointHistory pointHistory = pointHistoryTable.insert(id, amount, TransactionType.CHARGE, System.currentTimeMillis());
+            long resultPoint = userPoint.addPoint(pointHistory.amount());
+            return userPointTable.insertOrUpdate(id, resultPoint);
         }
-
-        UserPoint userPoint = userPointTable.selectById(id);
-        PointHistory pointHistory = pointHistoryTable.insert(id, amount, TransactionType.CHARGE, System.currentTimeMillis());
-        long resultPoint = userPoint.addPoint(pointHistory.amount());
-        return userPointTable.insertOrUpdate(id, resultPoint);
     }
 
-    public UserPoint usePoint(long id, long amount) {
-        UserPoint userPoint = userPointTable.selectById(id);
-        if (userPoint.point() < amount) {
-            throw new IllegalArgumentException("잔고 부족");
-        }
+    public  UserPoint usePoint(long id, long amount) {
+        synchronized (userPointTable) {
+            UserPoint userPoint = userPointTable.selectById(id);
+            if (userPoint.point() < amount) {
+                throw new IllegalArgumentException("잔고 부족");
+            }
 
-        PointHistory pointHistory = pointHistoryTable.insert(id, amount, TransactionType.USE, System.currentTimeMillis());
-        long resultPoint = userPoint.reducePoint(pointHistory.amount());
-        return userPointTable.insertOrUpdate(id, resultPoint);
+            PointHistory pointHistory = pointHistoryTable.insert(id, amount, TransactionType.USE, System.currentTimeMillis());
+            long resultPoint = userPoint.reducePoint(pointHistory.amount());
+            return userPointTable.insertOrUpdate(id, resultPoint);
+        }
     }
 }

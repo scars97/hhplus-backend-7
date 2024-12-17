@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -69,6 +72,51 @@ class PointServiceIntegrationTest {
             .contains(
                 tuple(1L, userId, amount, TransactionType.USE)
             );
+    }
+
+    @DisplayName("특정 회원의 충전과 사용 요청이 동시에 들어오는 경우, 순차적으로 실행된다.")
+    @Test
+    void chargeAndUseRequest_inAtSameTime_thenExecuteSequentially() throws InterruptedException {
+        // given
+        long userId = 1L;
+        int threadCount = 10;
+        long chargeAmount = 1000L;
+        long useAmount = 500L;
+
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        // when
+        for (int i = 0; i < threadCount / 2; i++) {
+            executorService.submit(() -> {
+                try {
+                    pointService.chargePoint(userId, chargeAmount);
+                } finally {
+                    latch.countDown();
+                }
+            });
+
+            executorService.submit(() -> {
+                try {
+                    try {
+                        pointService.usePoint(userId, useAmount);
+                    } catch (IllegalArgumentException e) {
+                        // 잔고 부족 예외 무시 (정상적인 시나리오)
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();
+        executorService.shutdown();
+
+        //then
+        long expectedPoint = threadCount / 2 * (chargeAmount - useAmount);
+        assertThat(pointService.getUserPoint(userId).point()).isEqualTo(expectedPoint);
+
+        List<PointHistory> histories = pointService.getPointHistories(userId);
+        assertThat(histories).hasSize(threadCount);
     }
 
 }
