@@ -1,5 +1,6 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.util.UserPointValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ public class PointController {
     public UserPoint point(
             @PathVariable("id") long id
     ) {
+        UserPointValidator.withId(id);
         return pointService.getUserPoint(id);
     }
 
@@ -37,6 +39,7 @@ public class PointController {
     public List<PointHistory> history(
             @PathVariable("id") long id
     ) {
+        UserPointValidator.withId(id);
         return pointService.getPointHistories(id);
     }
 
@@ -48,6 +51,7 @@ public class PointController {
             @PathVariable("id") long id,
             @RequestBody long amount
     ) {
+        UserPointValidator.withIdAndAmount(id, amount);
         return pointService.chargePoint(id, amount);
     }
 
@@ -59,6 +63,7 @@ public class PointController {
             @PathVariable("id") long id,
             @RequestBody long amount
     ) {
+        UserPointValidator.withIdAndAmount(id, amount);
         return pointService.usePoint(id, amount);
     }
 }

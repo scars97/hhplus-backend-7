@@ -45,7 +45,7 @@ class PointControllerTest {
     void getUserHistories_thenSuccessful() throws Exception {
         long userId = 2L;
         pointService.chargePoint(userId, 1500L);
-        pointService.chargePoint(userId, 1000L);
+        pointService.usePoint(userId, 1000L);
 
         // when //then
         mockMvc.perform(
@@ -59,7 +59,7 @@ class PointControllerTest {
                 .andExpect(jsonPath("$[1].id").value(2L))
                 .andExpect(jsonPath("$[1].userId").value(userId))
                 .andExpect(jsonPath("$[1].amount").value(1000L))
-                .andExpect(jsonPath("$[1].type").value("CHARGE"))
+                .andExpect(jsonPath("$[1].type").value("USE"))
                 .andDo(print());
     }
 
