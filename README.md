@@ -105,3 +105,169 @@ Q. 동시성 제어 방법은 어떤 것이 있고, 현 상황에서 적용할 �
   - Atomic Type은 어떻게 구현ㅎ..ㅐ..
 </div>
 </details>
+
+<details>
+<summary>12/17</summary>
+<div markdown="1">
+
+Q. 포인트 내역 저장 시간 테스트
+
+- 포인트 충전과 사용 시, 해당 건에 대한 내역이 저장되는데, 이때 저장시간을 DB 내부에서 결정하는 것이 아니라 외부에서 시간을 전달받는다.
+- 외부 의존 객체를 mocking 하게 되면 지정한 응답으로 덮여쓰여야 하는데, 시간 데이터는 다른 값으로 입력되는 문제가 발생했다.
+- 비즈니스 로직에서는 시간 파라미터를 변수로 지정한게 아니라 System.currentTimeMillis() 를 직접 파라미터로 전달한다.
+- 시간 불일치로 테스트가 실패하는데, 메서드 호출 시 결정되는 시간 값을 캡쳐하여 검증하는 방식으로 해결했다. → ArgumentCaptor
+
+Q. PointHistoryTable의 insert()는 왜 저장 시간을 파라미터로 받을까?
+
+- UserPointTable의  insertOrUpdate()는 메서드 내부에서 시간값을 결정한다.
+- 동적 값에 대한 테스트를 고려하라는 의도일까?
+- PointService의 chargePoint()에서 똑같이 외부에서 파라미터를 전달받도록 구현해봤다.
+
+```java
+public UserPoint chargePoint(long id, long amount, long updateMillis) {
+	// ...
+	PointHistory pointHistory = 
+		pointHistoryTable.insert(id, amount, TransactionType.CHARGE, updateMills);
+	/*PointHistory pointHistory = pointHistoryTable
+			.insert(id, amount, TransactionType.CHARGE, System.currentTimeMillis());*/
+	//...
+}
+```
+
+- Service에서도 굳이 시간 값을 외부에서 전달받아야하는지 의문이 듦.
+- 시간 값이 결정되는 시점은 포인트 내역 저장 메서드가 호출될 때라고 생각.
+- 비즈니스 로직이 동작하는 것에는 파라미터로 전달 받든 직접 넣든 상관은 없음.
+  하지만 mock을 사용한 단위 테스트에서 문제 발생
+- 시간 주입을 위한 인터페이스를 만들어서 고정된 값으로 테스트해보는 방법이 있지만
+  Table 클래스의 수정이 필요하다.
+  Mocito의 ArgumentCaptor를 사용해서 메서드 호출 시점에서 시간 값을 캡처하고 검증하는 방식으로 테스트를 작성했다.
+- 비즈니스 로직은 정상적으로 동작하지만 테스트가 실패해서 비즈니스 로직을 수정한다…?
+  충전 기능에 대한 테스트인데 포인트 내역 저장에서 문제가 발생한다.
+  이걸 단위 테스트로 작성하는 것이 맞는걸까?
+
+Q. synchronized
+
+- synchronized lock 범위에 따라 동기화되는 방식이 다르다.
+- 정적 메서드 (Class Lock) : 클래스의 Class 객체에 대한 락이 걸린다.
+  → 여러 스레드가 해당 클래스에 대한 인스턴스를 각각 가지고 있다해도, 한 스레드가 점유하고 있으면 동작이 끝날 때까지 접근하지 못한다.
+  → 클래스의 정적 메서드에 접근하려는 모든 스레드는 하나의 Class 객체에 대해 경쟁하게 된다.
+- 일반 메서드 (Instance Lock) : 클래스의 인스턴스에 대한 락이 걸린다.
+  → 스레드마다 서로 다른 인스턴스를 사용하면, 각 인스턴스는 독립된 락을 가지므로 동일한 메서드에 동시에 접근할 수 있다.
+  → 반대로 스레드마다 동일한 인스턴스를 사용하면, 한 번에 하나의 스레드만 메서드를 실행 할 수 있다.
+- 스프링은 싱글톤 방식을 사용하기 때문에 모든 스레드가 동일한 인스턴스를 공유하게 된다.
+
+```java
+// 포인트 충전과 사용 요청이 동시에 들어오는 경우
+ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+CountDownLatch latch = new CountDownLatch(threadCount);
+for (int i = 0; i < threadCount / 2; i++) {
+    executorService.submit(() -> {
+        try {
+            pointService.chargePoint(userId, chargeAmount);
+        } finally {
+            latch.countDown();
+        }
+    });
+
+    executorService.submit(() -> {
+        try {
+            try {
+                pointService.usePoint(userId, useAmount);
+            } catch (IllegalArgumentException e) {
+
+            }
+        } finally {
+            latch.countDown();
+        }
+    });
+}
+latch.await();
+executorService.shutdown();
+
+// 비즈니스 로직
+public synchronized UserPoint chargePoint(...) {
+	//...
+}
+public synchronized UserPoint usePoint(...) {
+	//...
+}
+```
+
+- 포인트 충전과 사용 요청이 동시에 실행되는 상황을 가정했지만 동시 실행이 아닌 순차적으로 실행된다.
+- 모든 스레드가 동일한 pointService 인스턴스에 접근하게 되고, 충전과 사용 메서드가 **순차적으로 실행**된다.
+- synchronized 를 사용한다면 메서드 레벨이 아닌 특정 블록에 사용하여 락 범위를 줄이는 것이 좋다.
+  - 어떤 행위(충전, 사용)에 대해서는 순차적으로 실행될 수 있지만, 다른 유저의 요청이 들어온다면 이전 작업이 끝날 때까지 대기해야 한다.
+    → id = 1  회원의 작업이 끝나야만 id = 2 회원의 작업이 실행될 수 있다.
+
+```java
+UserPointTable userPointTable;
+public UserPoint chargePoint(long id, long amount) {
+    synchronized (userPointTable) { // 특정 유저에 대한 동기화
+        // ...
+    }
+}
+```
+
+synchronized는 순차적인 실행을 보장하지만, **작업의 순서는 보장하지 않는다.**
+
+Q. Mock & Stub
+
+Mock
+
+- 구체적인 구현이 필요하다면 mock 을 사용한다.
+- 입력과 상관없이 어떤 행동을 할 지에 초점을 맞춘다.
+
+```java
+when(userRepository.getUser(id)).thenReturn(new User(1L, "username"));
+```
+
+Stub
+
+- 객체의 행동에 상관없이 결과만 필요할 때 test용으로 따로 정의해서 구현할 수 있다.
+- 재사용의 장점이 있다.
+
+```java
+// test 디렉토리에만 존재
+class FakeUserRepository implements UserRepository {
+		public User getUser(Long id) {
+				return new User(1L, "username");
+		}
+}
+```
+
+Q. synchronized vs ConcurrentHashMap/ReentrantRock
+
+- A의 충전, B의 사용, C의 충전 및 사용 → 각 회원마다 동시에 실행되어야 한다.
+- A의 충전, 사용, 사용 → 순차적으로 실행되어야 한다.
+- syn의 경우 동시성을 제어하고 요청을 순차적으로 처리하여 두 번째 요구에는 적합하지만  동시성을 필요로하는 첫 번째 요구에는 적합하지 않다.
+- ConcurrentHashMap 은 특정 버킷에 대한 Lock을 사용한다. 이 말은 각각의 회원마다 Lock을 가질 수 있다는 것이다. → ABC 회원의 요청을 동시에 실행시킬 수 있다.
+- ConcurrentHashMap에서 사용할 Lock 메커니즘을 ReentrantLock으로 설정한다면 동일한 회원의 요청에는 순차적으로 실행되게 한다.
+  ReentrantLock은 하나의 **공유된 락**을 기반으로 동작한다.
+  스레드가 lock을 호출하면, 다른 스레드는 락이 해제될 때까지 대기하게 된다.
+  이 때문에 하나의 스레드가 작업을 마칠 때까지 **다른 스레드가 실행될 수 없으므로**, 작업이 순차적으로 진행되는 것처럼 보인다.
+  여기서 순차적으로 진행되는 것처럼 보인다라는 말은 **스레드가 실제로 순서대로 실행될 수도 있지만, 그 순서를 절대적으로 보장하지는 않는다**는 의미이다.
+
+Q. 순서는 어떻게 보장할 수 있을까
+
+- 순서 보장을 위해 BlockingQueue를 사용했다.
+- 큐에 저장된 작업을 꺼내는 순서는 맞을지 몰라도 락을 획득하는 스레드가 임의로 실행되기 때문에 BlockingQueue의 순서와 실제 실행 순서가 일치하지 않게 된다.
+- ReentrantLock의 공정락을 사용하여 순서를 보장할 수 있는데,
+  락을 요청한 시점 순서대로 별도의 큐를 두고 순차적으로 실행되게 한다. → fairness
+</div>
+</details>
+
+<details>
+<summary>12/18</summary>
+<div markdown="1">
+
+Q. Controller 테스트
+- 통합 테스트로 진행해줘야 하는걸까?
+  → 외부에서부터 외부로까지 요청과 응답이 내가 원하는대로 이루어지는지 확인하려면 통합 테스트가 맞는 것 같다.
+  그렇다면 controller를 단위테스트로 작성하는 사례도 있을까?
+- 지금 막힌 부분이 회원 포인트 내역 목록을 조회하는 테스트인데
+  데이터가 있어야 조회를 할 수 있다. controller 테스트인데 데이터를 만드는 로직을 넣어야할까?
+1. 포인트 사용/충전 과 내역 조회를 다이나믹 테스트로 묶어볼 수 있다.
+   → 사용과 충전 테스트는 따로 작성해야하기 때문에 내역 조회에 대한 코드가 중복된다.
+2. 사용/충전 테스트 마지막에 내역 조회 테스트 메서드를 삽입해볼 수있다.
+</div>
+</details>
