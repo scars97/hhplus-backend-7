@@ -1,5 +1,6 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.PointException;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.junit.jupiter.api.BeforeEach;
@@ -7,13 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import java.time.LocalTime;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -76,50 +72,24 @@ class PointServiceIntegrationTest {
             );
     }
 
-    @DisplayName("동일한 회원에 대한 충전과 사용 요청은 메서드가 실행된 순서대로 순차적으로 실행된다.")
+    @DisplayName("동일한 회원에 대한 충전과 사용 요청이 순차적으로 실행된다.")
     @Test
-    void chargeAndUseRequest_withSameUser_thenExecuteSequentially() throws InterruptedException {
+    void chargeAndUseRequest_withSameUser_thenExecuteSequentially() {
         // given
         long userId = 1L;
-        int threadCount = 2;
         long chargeAmount = 1000L;
         long useAmount = 500L;
 
-        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch latch = new CountDownLatch(threadCount);
-
-        LinkedBlockingQueue<Runnable> taskQueue = new LinkedBlockingQueue<>();
-
         // when
-        taskQueue.put(() -> {
-            try {
-                try {
-                    pointService.usePoint(userId, useAmount);
-                } catch (IllegalArgumentException e) {
-                    System.out.println("잔고 부족");
-                }
-            } finally {
-                latch.countDown();
-            }
-        });
-        taskQueue.put(() -> {
-            try {
-                pointService.chargePoint(userId, chargeAmount);
-            } finally {
-                latch.countDown();
-            }
-        });
+        CompletableFuture.allOf(
+            CompletableFuture.runAsync(() -> pointService.chargePoint(userId, chargeAmount)),
+            CompletableFuture.runAsync(() -> pointService.usePoint(userId, useAmount)),
+            CompletableFuture.runAsync(() -> pointService.usePoint(userId, useAmount)),
+            CompletableFuture.runAsync(() -> pointService.chargePoint(userId, chargeAmount)),
+            CompletableFuture.runAsync(() -> pointService.chargePoint(userId, chargeAmount))
+        ).join();
 
-        while (!taskQueue.isEmpty()) {
-            Runnable task = taskQueue.take();
-            executorService.submit(task);
-        }
-        latch.await();
-        executorService.shutdown();
-
-        //then
-        long expectedPoint = chargeAmount - useAmount;
-        assertThat(pointService.getUserPoint(userId).point()).isEqualTo(expectedPoint);
+        assertThat(pointService.getUserPoint(userId).point()).isEqualTo(2000L);
     }
 
 }

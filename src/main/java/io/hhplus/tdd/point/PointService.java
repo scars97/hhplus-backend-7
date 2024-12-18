@@ -35,7 +35,7 @@ public class PointService {
     }
 
     private Lock getLock(long userId) {
-        return locks.computeIfAbsent(userId, id -> new ReentrantLock());
+        return locks.computeIfAbsent(userId, id -> new ReentrantLock(true));
     }
 
     public UserPoint chargePoint(long id, long amount) {
