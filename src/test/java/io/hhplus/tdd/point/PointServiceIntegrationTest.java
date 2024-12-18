@@ -92,4 +92,34 @@ class PointServiceIntegrationTest {
         assertThat(pointService.getUserPoint(userId).point()).isEqualTo(2000L);
     }
 
+    @DisplayName("여러 회원의 요청을 동시에 실행한다.")
+    @Test
+    void shouldHandleConcurrentRequests_fromMultipleUsers() {
+        // given
+        long userId1 = 1L;
+        long userId2 = 2L;
+        long userId3 = 3L;
+        long chargeAmount1 = 1000L;
+        long chargeAmount2 = 1500L;
+        long chargeAmount3 = 2000L;
+
+        CompletableFuture.allOf(
+                CompletableFuture.runAsync(() -> executeChargePoint(userId1, chargeAmount1)),
+                CompletableFuture.runAsync(() -> executeChargePoint(userId2, chargeAmount2)),
+                CompletableFuture.runAsync(() -> executeChargePoint(userId1, chargeAmount1)),
+                CompletableFuture.runAsync(() -> executeChargePoint(userId3, chargeAmount3)),
+                CompletableFuture.runAsync(() -> executeChargePoint(userId2, chargeAmount2))
+                ).join();
+
+        //then
+        assertThat(pointService.getUserPoint(userId1).point()).isEqualTo(chargeAmount1 * 2);
+        assertThat(pointService.getUserPoint(userId2).point()).isEqualTo(chargeAmount2 * 2);
+        assertThat(pointService.getUserPoint(userId3).point()).isEqualTo(chargeAmount3);
+    }
+
+    private void executeChargePoint(long userId, long chargeAmount) {
+        System.out.printf("%s : %d start charge at %d%n", Thread.currentThread().getName(), userId, System.nanoTime());
+        pointService.chargePoint(userId, chargeAmount);
+        System.out.printf("%s : %d end charge at %d%n", Thread.currentThread().getName(), userId, System.nanoTime());
+    }
 }
