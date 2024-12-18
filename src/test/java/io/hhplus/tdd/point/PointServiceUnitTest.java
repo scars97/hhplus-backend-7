@@ -1,5 +1,6 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.PointException;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.junit.jupiter.api.DisplayName;
@@ -9,8 +10,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -70,7 +69,7 @@ class PointServiceUnitTest {
 
         // when //then
         assertThatThrownBy(() -> pointService.chargePoint(id, invalidAmount))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(PointException.class)
                 .hasMessage("포인트 충전은 1,000원 이상부터 가능합니다.");
     }
 
@@ -118,7 +117,7 @@ class PointServiceUnitTest {
 
         // when //then
         assertThatThrownBy(() -> pointService.usePoint(userId, amount))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(PointException.class)
                 .hasMessage("잔고 부족");
         verify(userPointTable).selectById(userId);
     }
