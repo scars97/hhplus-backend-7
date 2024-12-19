@@ -71,7 +71,7 @@ class PointServiceIntegrationTest {
             );
     }
 
-    @DisplayName("동일한 회원에 대한 충전과 사용 요청이 순차적으로 실행된다.")
+    @DisplayName("동일한 회원에 대한 충전과 사용 요청에 의한 작업이 순차적으로 실행된다.")
     @Test
     void chargeAndUseRequest_withSameUser_thenExecuteSequentially() {
         // given
@@ -91,7 +91,7 @@ class PointServiceIntegrationTest {
         assertThat(pointService.getUserPoint(userId).point()).isEqualTo(2000L);
     }
 
-    @DisplayName("여러 회원의 요청을 동시에 실행한다.")
+    @DisplayName("여러 회원 요청에 대한 작업을 동시에 실행한다.")
     @Test
     void shouldHandleConcurrentRequests_fromMultipleUsers() {
         // given

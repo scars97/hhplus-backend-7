@@ -30,6 +30,7 @@ class PointControllerTest {
         pointService.chargePoint(userId, 1000L);
 
         // when //then
+
         mockMvc.perform(
                 get("/point/{id}", userId)
                         .contentType(MediaType.APPLICATION_JSON))
