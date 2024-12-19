@@ -32,8 +32,8 @@ class PointControllerTest {
         // when //then
 
         mockMvc.perform(
-                get("/point/{id}", userId)
-                        .contentType(MediaType.APPLICATION_JSON))
+                        get("/point/{id}", userId)
+                                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(userId))
                 .andExpect(jsonPath("$.point").value(1000))
@@ -50,8 +50,8 @@ class PointControllerTest {
 
         // when //then
         mockMvc.perform(
-                get("/point/{id}/histories", userId)
-                        .contentType(MediaType.APPLICATION_JSON))
+                        get("/point/{id}/histories", userId)
+                                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].userId").value(userId))
@@ -71,9 +71,9 @@ class PointControllerTest {
 
         // when //then
         mockMvc.perform(
-                patch("/point/{id}/charge", userId)
-                    .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.valueOf(1500L)))
+                        patch("/point/{id}/charge", userId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(String.valueOf(1500L)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(userId))
                 .andExpect(jsonPath("$.point").value(1500L))
@@ -89,9 +89,9 @@ class PointControllerTest {
 
         // when //then
         mockMvc.perform(
-                patch("/point/{id}/use", userId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.valueOf(useAmount)))
+                        patch("/point/{id}/use", userId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(String.valueOf(useAmount)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(userId))
                 .andExpect(jsonPath("$.point").value(initialPoint.point() - useAmount))

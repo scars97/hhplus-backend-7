@@ -1,6 +1,6 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.exception.UserPointException;
+import io.hhplus.tdd.UserPointException;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.junit.jupiter.api.DisplayName;

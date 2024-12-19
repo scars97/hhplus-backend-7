@@ -1,6 +1,6 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.exception.UserPointException;
+import io.hhplus.tdd.UserPointException;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +20,10 @@ public class PointService {
     private final PointHistoryTable pointHistoryTable;
     private final ConcurrentHashMap<Long, Lock> locks = new ConcurrentHashMap<>();
 
+    private Lock getLock(long userId) {
+        return locks.computeIfAbsent(userId, id -> new ReentrantLock(true));
+    }
+
     @Autowired
     public PointService(UserPointTable userPointTable, PointHistoryTable pointHistoryTable) {
         this.userPointTable = userPointTable;
@@ -32,10 +36,6 @@ public class PointService {
 
     public List<PointHistory> getPointHistories(long id) {
         return pointHistoryTable.selectAllByUserId(id);
-    }
-
-    private Lock getLock(long userId) {
-        return locks.computeIfAbsent(userId, id -> new ReentrantLock(true));
     }
 
     public UserPoint chargePoint(long id, long amount) {
@@ -54,7 +54,7 @@ public class PointService {
         }
     }
 
-    public  UserPoint usePoint(long id, long amount) {
+    public UserPoint usePoint(long id, long amount) {
         Lock lock = getLock(id);
         lock.lock();
         try {
@@ -66,7 +66,7 @@ public class PointService {
             PointHistory pointHistory = pointHistoryTable.insert(id, amount, TransactionType.USE, System.currentTimeMillis());
             long resultPoint = userPoint.reducePoint(pointHistory.amount());
             return userPointTable.insertOrUpdate(id, resultPoint);
-        }  finally {
+        } finally {
             lock.unlock();
         }
     }

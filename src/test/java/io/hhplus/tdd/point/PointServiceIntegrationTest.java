@@ -103,12 +103,12 @@ class PointServiceIntegrationTest {
         long chargeAmount3 = 2000L;
 
         CompletableFuture.allOf(
-                CompletableFuture.runAsync(() -> executeChargePoint(userId1, chargeAmount1)),
-                CompletableFuture.runAsync(() -> executeChargePoint(userId2, chargeAmount2)),
-                CompletableFuture.runAsync(() -> executeChargePoint(userId1, chargeAmount1)),
-                CompletableFuture.runAsync(() -> executeChargePoint(userId3, chargeAmount3)),
-                CompletableFuture.runAsync(() -> executeChargePoint(userId2, chargeAmount2))
-                ).join();
+            CompletableFuture.runAsync(() -> executeChargePoint(userId1, chargeAmount1)),
+            CompletableFuture.runAsync(() -> executeChargePoint(userId2, chargeAmount2)),
+            CompletableFuture.runAsync(() -> executeChargePoint(userId1, chargeAmount1)),
+            CompletableFuture.runAsync(() -> executeChargePoint(userId3, chargeAmount3)),
+            CompletableFuture.runAsync(() -> executeChargePoint(userId2, chargeAmount2))
+        ).join();
 
         //then
         assertThat(pointService.getUserPoint(userId1).point()).isEqualTo(chargeAmount1 * 2);

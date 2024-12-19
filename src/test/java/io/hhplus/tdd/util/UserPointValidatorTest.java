@@ -1,6 +1,6 @@
 package io.hhplus.tdd.util;
 
-import io.hhplus.tdd.exception.UserPointException;
+import io.hhplus.tdd.UserPointException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
