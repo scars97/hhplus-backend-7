@@ -29,35 +29,23 @@ class PointServiceUnitTest {
     void chargePoint_shouldIncreasePointAndSavePointHistory() {
         // given
         long userId = 1L;
-        long amount = 1000L;
+        long originalPoint = 1000L;
+        long chargePoint = 1000L;
         long currentTime = System.currentTimeMillis();
 
-        long initialPoint = 5000L;
-        long chargedPoint = initialPoint + amount;
-        UserPoint mockUserPoint = new UserPoint(userId, initialPoint, currentTime);
-        PointHistory mockPointHistory = new PointHistory(1L, userId, amount, TransactionType.CHARGE, currentTime);
-
-        when(userPointTable.selectById(userId)).thenReturn(mockUserPoint);
-        /*
-         * 포인트 내역 저장 시간은 pointHistoryTable.insert()를 호출할 때 값이 결정된다.
-         * 테스트의 경우 currentTime 이라는 지정된 값을 전달했기 때문에 시간 값 불일치로 실패한다.
-         * ArgumentCaptor 를 사용해서 메서드 호출 시 결정된 값을 캡처하여 검증한다.
-         */
-        ArgumentCaptor<Long> timeCaptor = ArgumentCaptor.forClass(Long.class);
-        when(pointHistoryTable.insert(eq(userId), eq(amount), eq(TransactionType.CHARGE), timeCaptor.capture())).thenReturn(mockPointHistory);
-        when(userPointTable.insertOrUpdate(userId, chargedPoint)).thenReturn(new UserPoint(userId, chargedPoint, currentTime));
+        when(userPointTable.selectById(userId)).thenReturn(new UserPoint(userId, originalPoint, currentTime));
+        when(userPointTable.insertOrUpdate(userId, originalPoint + chargePoint)).thenReturn(new UserPoint(userId, originalPoint + chargePoint, currentTime));
 
         // when
-        UserPoint updatedPoint = pointService.chargePoint(userId, amount);
+        UserPoint userPoint = pointService.chargePoint(userId, chargePoint);
 
         // then
-        Long capturedTime = timeCaptor.getValue();
-        assertThat(updatedPoint)
+        assertThat(userPoint)
                 .extracting("id", "point", "updateMillis")
-                .containsExactly(userId, chargedPoint, currentTime);
-        verify(userPointTable).selectById(userId);
-        verify(pointHistoryTable).insert(userId, amount, TransactionType.CHARGE, capturedTime);
-        verify(userPointTable).insertOrUpdate(userId, initialPoint + amount);
+                .containsExactly(userId, originalPoint + chargePoint, currentTime);
+
+        ArgumentCaptor<Long> timeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(pointHistoryTable, times(1)).insert(eq(userId), eq(chargePoint), eq(TransactionType.CHARGE), timeCaptor.capture());
     }
 
     @DisplayName("포인트 충전 시, 입력된 값이 1000 미만인 경우 예외가 발생한다.")
@@ -78,30 +66,23 @@ class PointServiceUnitTest {
     void usedPoint_shouldReducePointAndSavePointHistory() {
         // given
         long userId = 1L;
-        long amount = 1000L;
+        long originalPoint = 1000L;
+        long usePoint = 900L;
         long currentTime = System.currentTimeMillis();
 
-        long initialPoint = 5000L;
-        long remainingPoint = initialPoint - amount;
-        UserPoint mockUserPoint = new UserPoint(userId, initialPoint, currentTime);
-        PointHistory mockPointHistory = new PointHistory(1L, userId, amount, TransactionType.USE, currentTime);
-
-        when(userPointTable.selectById(userId)).thenReturn(mockUserPoint);
-        ArgumentCaptor<Long> timeCaptor = ArgumentCaptor.forClass(Long.class);
-        when(pointHistoryTable.insert(eq(userId), eq(amount), eq(TransactionType.USE), timeCaptor.capture())).thenReturn(mockPointHistory);
-        when(userPointTable.insertOrUpdate(userId, remainingPoint)).thenReturn(new UserPoint(userId, remainingPoint, currentTime));
+        when(userPointTable.selectById(userId)).thenReturn(new UserPoint(userId, originalPoint, currentTime));
+        when(userPointTable.insertOrUpdate(userId, originalPoint - usePoint)).thenReturn(new UserPoint(userId, originalPoint - usePoint, currentTime));
 
         // when
-        UserPoint remainingUserPoint = pointService.usePoint(userId, amount);
+        UserPoint remainingUserPoint = pointService.usePoint(userId, usePoint);
 
         //then
-        Long capturedTime = timeCaptor.getValue();
         assertThat(remainingUserPoint)
                 .extracting("id", "point", "updateMillis")
-                .containsExactly(userId, remainingPoint, currentTime);
-        verify(userPointTable).selectById(userId);
-        verify(pointHistoryTable).insert(userId, amount, TransactionType.USE, capturedTime);
-        verify(userPointTable).insertOrUpdate(userId, remainingPoint);
+                .containsExactly(userId, originalPoint - usePoint, currentTime);
+
+        ArgumentCaptor<Long> timeCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(pointHistoryTable, times(1)).insert(eq(userId), eq(usePoint), eq(TransactionType.USE), timeCaptor.capture());
     }
 
     @DisplayName("포인트 사용 시, 입력된 값이 회원의 보유 포인트보다 큰 경우 예외가 발생한다.")
